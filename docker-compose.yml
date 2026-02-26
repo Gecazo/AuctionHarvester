@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: auctionharvester-postgres
+    environment:
+      POSTGRES_USER: auction
+      POSTGRES_PASSWORD: auction
+      POSTGRES_DB: auctionharvester
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data

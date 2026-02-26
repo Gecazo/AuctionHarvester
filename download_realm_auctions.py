@@ -120,19 +120,182 @@ def default_locale_for_region(region: str) -> str:
     }[region]
 
 
+def known_realms_from_files(region: str, output_dir: str) -> list[str]:
+    base = pathlib.Path(output_dir)
+    pattern = re.compile(rf"^auctions_(?P<slug>.+)_{region}\.json$")
+    realms: set[str] = set()
+
+    if not base.exists():
+        return []
+
+    for path in base.glob(f"auctions_*_{region}.json"):
+        match = pattern.match(path.name)
+        if not match:
+            continue
+        realms.add(match.group("slug"))
+
+    return sorted(realms)
+
+
+def known_realms_from_list_file(region: str, realm_list_path: str | None) -> list[str]:
+    default_path = pathlib.Path("realm_lists") / f"{region}_realms.txt"
+    path = pathlib.Path(realm_list_path) if realm_list_path else default_path
+    if not path.exists():
+        return []
+
+    realms: list[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        realms.append(realm_slug(line))
+
+    return sorted(set(realms))
+
+
+def download_single_realm(
+    region: str,
+    realm: str,
+    locale: str,
+    token: str,
+    output: str | None,
+    output_dir: str,
+) -> None:
+    namespace = f"dynamic-{region}"
+    encoded_realm = urllib.parse.quote(realm, safe="")
+    realm_payload = request_json(
+        region=region,
+        path=f"/data/wow/realm/{encoded_realm}",
+        token=token,
+        namespace=namespace,
+        locale=locale,
+    )
+    connected_realm_id = parse_connected_realm_id(realm_payload)
+
+    auctions_payload = request_json(
+        region=region,
+        path=f"/data/wow/connected-realm/{connected_realm_id}/auctions",
+        token=token,
+        namespace=namespace,
+        locale=locale,
+    )
+
+    out_path = (
+        pathlib.Path(output)
+        if output
+        else pathlib.Path(output_dir) / f"auctions_{realm}_{region}.json"
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as file:
+        json.dump(auctions_payload, file, indent=2)
+
+    auctions_count = len(auctions_payload.get("auctions", []))
+    print(f"Saved {auctions_count} auctions to {out_path}")
+    print(f"Realm: {realm} ({region.upper()})")
+    print(f"Connected realm ID: {connected_realm_id}")
+
+
+def download_all_realms(
+    region: str,
+    locale: str,
+    token: str,
+    output_dir: str,
+    realm_list_path: str | None,
+) -> None:
+    realms = known_realms_from_files(region=region, output_dir=output_dir)
+    if not realms:
+        realms = known_realms_from_list_file(region=region, realm_list_path=realm_list_path)
+
+    if not realms:
+        raise RuntimeError(
+            f"No known realm files in {output_dir} for {region.upper()} and no realm list found. "
+            f"Add realm slugs to realm_lists/{region}_realms.txt or pass --realm-list."
+        )
+
+    print(f"Updating {len(realms)} known realms for {region.upper()}...")
+    namespace = f"dynamic-{region}"
+    connected_to_slugs: dict[int, list[str]] = {}
+    failed = 0
+
+    for slug in realms:
+        try:
+            encoded_realm = urllib.parse.quote(slug, safe="")
+            realm_payload = request_json(
+                region=region,
+                path=f"/data/wow/realm/{encoded_realm}",
+                token=token,
+                namespace=namespace,
+                locale=locale,
+            )
+            connected_realm_id = parse_connected_realm_id(realm_payload)
+            connected_to_slugs.setdefault(connected_realm_id, []).append(slug)
+        except RuntimeError as err:
+            failed += 1
+            print(f"Warn: failed realm {slug}: {err}", file=sys.stderr)
+
+    cached_payloads: dict[int, dict] = {}
+    for connected_realm_id, slugs in connected_to_slugs.items():
+        try:
+            auctions_payload = request_json(
+                region=region,
+                path=f"/data/wow/connected-realm/{connected_realm_id}/auctions",
+                token=token,
+                namespace=namespace,
+                locale=locale,
+            )
+            cached_payloads[connected_realm_id] = auctions_payload
+
+            for slug in slugs:
+                out_path = pathlib.Path(output_dir) / f"auctions_{slug}_{region}.json"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(out_path, "w", encoding="utf-8") as file:
+                    json.dump(auctions_payload, file, indent=2)
+
+                auctions_count = len(auctions_payload.get("auctions", []))
+                print(f"Saved {auctions_count} auctions to {out_path}")
+                print(f"Realm: {slug} ({region.upper()})")
+                print(f"Connected realm ID: {connected_realm_id}")
+        except RuntimeError as err:
+            failed += len(slugs)
+            print(
+                f"Warn: failed connected realm {connected_realm_id} for {len(slugs)} slug(s): {err}",
+                file=sys.stderr,
+            )
+
+    updated = len(realms) - failed
+    print(
+        f"Connected realm batches fetched: {len(cached_payloads)} "
+        f"(deduped from {len(realms)} realm slugs)"
+    )
+    print(f"Done. Updated {updated}/{len(realms)} realms in {output_dir}")
+    print(f"Output dir: {output_dir}")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Download auctions for one WoW realm")
+    parser = argparse.ArgumentParser(
+        description="Download WoW auctions: one chosen server or all servers in a region"
+    )
     parser.add_argument("--region", default="eu", choices=sorted(VALID_REGIONS))
-    parser.add_argument("--realm", default="kazzak", help="Realm name (example: kazzak)")
+    parser.add_argument("--realm", default=None, help="Single server name (example: kazzak)")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download all servers in the selected region",
+    )
     parser.add_argument("--locale", default=None, help="Optional locale override (example: en_GB)")
     parser.add_argument("--output", default=None, help="Optional output file path")
+    parser.add_argument("--output-dir", default="data", help="Output folder for generated files")
+    parser.add_argument(
+        "--realm-list",
+        default=None,
+        help="Optional text file with one realm slug per line (used by --all when output files do not exist)",
+    )
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
     region = args.region
-    realm = realm_slug(args.realm)
     locale = args.locale or default_locale_for_region(region)
 
     client_id, client_secret = load_credentials()
@@ -142,38 +305,25 @@ def main() -> None:
 
     try:
         token = get_access_token(client_id, client_secret)
-        namespace = f"dynamic-{region}"
+        if args.all:
+            download_all_realms(
+                region=region,
+                locale=locale,
+                token=token,
+                output_dir=args.output_dir,
+                realm_list_path=args.realm_list,
+            )
+            return
 
-        realm_payload = request_json(
+        realm = realm_slug(args.realm or "kazzak")
+        download_single_realm(
             region=region,
-            path=f"/data/wow/realm/{realm}",
-            token=token,
-            namespace=namespace,
+            realm=realm,
             locale=locale,
-        )
-        connected_realm_id = parse_connected_realm_id(realm_payload)
-
-        auctions_payload = request_json(
-            region=region,
-            path=f"/data/wow/connected-realm/{connected_realm_id}/auctions",
             token=token,
-            namespace=namespace,
-            locale=locale,
+            output=args.output,
+            output_dir=args.output_dir,
         )
-
-        out_path = (
-            pathlib.Path(args.output)
-            if args.output
-            else pathlib.Path("data") / f"auctions_{realm}_{region}.json"
-        )
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as file:
-            json.dump(auctions_payload, file, indent=2)
-
-        auctions_count = len(auctions_payload.get("auctions", []))
-        print(f"Saved {auctions_count} auctions to {out_path}")
-        print(f"Realm: {realm} ({region.upper()})")
-        print(f"Connected realm ID: {connected_realm_id}")
     except RuntimeError as err:
         print(f"Request failed: {err}", file=sys.stderr)
         raise SystemExit(1)
