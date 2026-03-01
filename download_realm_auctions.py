@@ -219,6 +219,7 @@ def download_all_realms(
 
     for slug in realms:
         try:
+            print(f"Processing realm: {slug}", file=sys.stderr)
             encoded_realm = urllib.parse.quote(slug, safe="")
             realm_payload = request_json(
                 region=region,
@@ -229,13 +230,14 @@ def download_all_realms(
             )
             connected_realm_id = parse_connected_realm_id(realm_payload)
             connected_to_slugs.setdefault(connected_realm_id, []).append(slug)
-        except RuntimeError as err:
+        except Exception as err:
             failed += 1
             print(f"Warn: failed realm {slug}: {err}", file=sys.stderr)
 
     cached_payloads: dict[int, dict] = {}
     for connected_realm_id, slugs in connected_to_slugs.items():
         try:
+            print(f"Fetching auctions for connected realm {connected_realm_id} ({', '.join(slugs)})", file=sys.stderr)
             auctions_payload = request_json(
                 region=region,
                 path=f"/data/wow/connected-realm/{connected_realm_id}/auctions",
@@ -255,7 +257,7 @@ def download_all_realms(
                 print(f"Saved {auctions_count} auctions to {out_path}")
                 print(f"Realm: {slug} ({region.upper()})")
                 print(f"Connected realm ID: {connected_realm_id}")
-        except RuntimeError as err:
+        except Exception as err:
             failed += len(slugs)
             print(
                 f"Warn: failed connected realm {connected_realm_id} for {len(slugs)} slug(s): {err}",
