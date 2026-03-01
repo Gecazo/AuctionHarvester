@@ -7,7 +7,6 @@ import re
 import sys
 
 import psycopg
-from psycopg.types.json import Jsonb
 
 FILE_PATTERN = re.compile(r"auctions_(?P<realm>.+)_(?P<region>us|eu|kr|tw)\.json$")
 
@@ -95,16 +94,15 @@ def insert_auctions(cur: psycopg.Cursor, snapshot_id: int, auctions: list[dict])
                 buyout,
                 unit_price,
                 time_left,
-                Jsonb(auction),
             )
         )
 
     cur.executemany(
         """
         INSERT INTO auctions(
-            snapshot_id, auction_id, item_id, quantity, bid, buyout, unit_price, time_left, raw
+            snapshot_id, auction_id, item_id, quantity, bid, buyout, unit_price, time_left
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         rows,
     )

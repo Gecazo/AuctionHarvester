@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS auctions (
     buyout BIGINT,
     unit_price BIGINT,
     time_left TEXT,
-    raw JSONB NOT NULL,
     PRIMARY KEY (snapshot_id, auction_id)
 );
 
