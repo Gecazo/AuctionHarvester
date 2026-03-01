@@ -202,9 +202,9 @@ def download_all_realms(
     output_dir: str,
     realm_list_path: str | None,
 ) -> None:
-    realms = known_realms_from_files(region=region, output_dir=output_dir)
-    if not realms:
-        realms = known_realms_from_list_file(region=region, realm_list_path=realm_list_path)
+    realms_from_files = known_realms_from_files(region=region, output_dir=output_dir)
+    realms_from_list = known_realms_from_list_file(region=region, realm_list_path=realm_list_path)
+    realms = sorted(set(realms_from_files) | set(realms_from_list))
 
     if not realms:
         raise RuntimeError(

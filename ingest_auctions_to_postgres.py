@@ -26,7 +26,7 @@ def parse_file_meta(path: pathlib.Path) -> tuple[str, str]:
     return match.group("realm"), match.group("region")
 
 
-def to_timestamp(payload: dict) -> dt.datetime | None:
+def to_timestamp(payload: dict, source_path: pathlib.Path) -> dt.datetime:
     last_updated = payload.get("last_modified_timestamp")
     if isinstance(last_updated, (int, float)):
         return dt.datetime.fromtimestamp(last_updated / 1000, tz=dt.timezone.utc)
@@ -35,7 +35,11 @@ def to_timestamp(payload: dict) -> dt.datetime | None:
     if isinstance(fallback, (int, float)):
         return dt.datetime.fromtimestamp(fallback / 1000, tz=dt.timezone.utc)
 
-    return None
+    file_mtime = source_path.stat().st_mtime
+    if isinstance(file_mtime, (int, float)):
+        return dt.datetime.fromtimestamp(file_mtime, tz=dt.timezone.utc)
+
+    return dt.datetime.now(tz=dt.timezone.utc)
 
 
 def upsert_realm(cur: psycopg.Cursor, region: str, realm: str, connected_realm_id: int | None) -> int:
@@ -130,7 +134,7 @@ def main() -> None:
                     raise RuntimeError(f"Invalid auctions list in {path}")
 
                 connected_realm_id = payload.get("connected_realm", {}).get("id")
-                fetched_at = to_timestamp(payload)
+                fetched_at = to_timestamp(payload, source_path=path)
 
                 if isinstance(connected_realm_id, int):
                     dedupe_key = (region, connected_realm_id, fetched_at)
