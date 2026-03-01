@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS realms (
 CREATE TABLE IF NOT EXISTS snapshots (
     id BIGSERIAL PRIMARY KEY,
     realm_id BIGINT NOT NULL REFERENCES realms(id) ON DELETE CASCADE,
-    fetched_at TIMESTAMPTZ,
+    fetched_at TIMESTAMPTZ NOT NULL,
     source_file TEXT NOT NULL,
     auctions_count INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -31,3 +31,4 @@ CREATE TABLE IF NOT EXISTS auctions (
 CREATE INDEX IF NOT EXISTS idx_auctions_item_id ON auctions(item_id);
 CREATE INDEX IF NOT EXISTS idx_auctions_snapshot_id ON auctions(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_realm_id ON snapshots(realm_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_fetched_at ON snapshots(fetched_at DESC);
