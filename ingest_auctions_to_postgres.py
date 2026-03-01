@@ -58,6 +58,19 @@ def upsert_realm(cur: psycopg.Cursor, region: str, realm: str, connected_realm_i
     return int(row[0])
 
 
+def snapshot_exists(cur: psycopg.Cursor, realm_id: int, fetched_at: dt.datetime) -> bool:
+    """Check if a snapshot already exists for this realm at this exact fetched_at time."""
+    cur.execute(
+        """
+        SELECT 1 FROM snapshots
+        WHERE realm_id = %s AND fetched_at = %s
+        LIMIT 1
+        """,
+        (realm_id, fetched_at),
+    )
+    return cur.fetchone() is not None
+
+
 def insert_snapshot(cur: psycopg.Cursor, realm_id: int, file_path: str, auctions_count: int, fetched_at: dt.datetime | None) -> int:
     cur.execute(
         """
@@ -145,6 +158,12 @@ def main() -> None:
                     seen_connected_snapshots.add(dedupe_key)
 
                 realm_id = upsert_realm(cur, region, realm, connected_realm_id)
+                
+                # Skip if this exact snapshot already exists in the database
+                if snapshot_exists(cur, realm_id, fetched_at):
+                    print(f"Skipped {path}: snapshot already exists (fetched_at={fetched_at})")
+                    continue
+                
                 snapshot_id = insert_snapshot(
                     cur,
                     realm_id=realm_id,
