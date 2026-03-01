@@ -2,7 +2,7 @@ import argparse
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 
 VALID_REGIONS = {"us", "eu", "kr", "tw"}
@@ -73,11 +73,33 @@ def run_cycle(region: str, output_dir: str) -> None:
     print(f"[{datetime.now(timezone.utc).isoformat()}] Cycle completed for {region.upper()}")
 
 
+def run_daily_aggregation() -> None:
+    """Run the daily aggregation script for the previous day."""
+    print(f"[{datetime.now(timezone.utc).isoformat()}] Running daily aggregation...")
+    try:
+        run_command([sys.executable, "aggregate_daily_snapshots.py"])
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Daily aggregation completed")
+    except subprocess.CalledProcessError as err:
+        print(
+            f"Daily aggregation failed with exit code {err.returncode}",
+            file=sys.stderr,
+        )
+
+
 def main() -> None:
     args = parse_args()
     regions = parse_regions(args.region, args.regions)
+    
+    # Track the last aggregation date to run it once per day at midnight
+    last_aggregation_date = date.today()
 
     while True:
+        # Check if we've crossed into a new day
+        current_date = date.today()
+        if current_date > last_aggregation_date:
+            run_daily_aggregation()
+            last_aggregation_date = current_date
+        
         for region in regions:
             try:
                 run_cycle(region=region, output_dir=args.output_dir)

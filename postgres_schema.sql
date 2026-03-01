@@ -28,6 +28,24 @@ CREATE TABLE IF NOT EXISTS auctions (
     PRIMARY KEY (snapshot_id, auction_id)
 );
 
+CREATE TABLE IF NOT EXISTS daily_snapshots_avg (
+    id BIGSERIAL PRIMARY KEY,
+    realm_id BIGINT NOT NULL REFERENCES realms(id) ON DELETE CASCADE,
+    item_id BIGINT,
+    fetched_at TIMESTAMPTZ NOT NULL,
+    avg_buyout BIGINT,
+    avg_bid BIGINT,
+    avg_unit_price BIGINT,
+    count_auctions BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (realm_id, item_id, fetched_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_snapshots_avg_realm_id ON daily_snapshots_avg(realm_id);
+CREATE INDEX IF NOT EXISTS idx_daily_snapshots_avg_item_id ON daily_snapshots_avg(item_id);
+CREATE INDEX IF NOT EXISTS idx_daily_snapshots_avg_fetched_at ON daily_snapshots_avg(fetched_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_auctions_item_id ON auctions(item_id);
 CREATE INDEX IF NOT EXISTS idx_auctions_snapshot_id ON auctions(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_realm_id ON snapshots(realm_id);
