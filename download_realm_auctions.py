@@ -7,6 +7,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from tqdm import tqdm
 
 
 VALID_REGIONS = {"us", "eu", "kr", "tw"}
@@ -212,14 +213,12 @@ def download_all_realms(
             f"Add realm slugs to realm_lists/{region}_realms.txt or pass --realm-list."
         )
 
-    print(f"Updating {len(realms)} known realms for {region.upper()}...")
     namespace = f"dynamic-{region}"
     connected_to_slugs: dict[int, list[str]] = {}
     failed = 0
 
-    for slug in realms:
+    for slug in tqdm(realms, desc=f"{region.upper()} realms", unit="realm"):
         try:
-            print(f"Processing realm: {slug}", file=sys.stderr)
             encoded_realm = urllib.parse.quote(slug, safe="")
             realm_payload = request_json(
                 region=region,
@@ -232,12 +231,15 @@ def download_all_realms(
             connected_to_slugs.setdefault(connected_realm_id, []).append(slug)
         except Exception as err:
             failed += 1
-            print(f"Warn: failed realm {slug}: {err}", file=sys.stderr)
+            tqdm.write(f"Warn: failed realm {slug}: {err}")
 
     cached_payloads: dict[int, dict] = {}
-    for connected_realm_id, slugs in connected_to_slugs.items():
+    for connected_realm_id, slugs in tqdm(
+        connected_to_slugs.items(), 
+        desc=f"{region.upper()} auctions", 
+        unit="connected-realm"
+    ):
         try:
-            print(f"Fetching auctions for connected realm {connected_realm_id} ({', '.join(slugs)})", file=sys.stderr)
             auctions_payload = request_json(
                 region=region,
                 path=f"/data/wow/connected-realm/{connected_realm_id}/auctions",
@@ -254,14 +256,13 @@ def download_all_realms(
                     json.dump(auctions_payload, file, indent=2)
 
                 auctions_count = len(auctions_payload.get("auctions", []))
-                print(f"Saved {auctions_count} auctions to {out_path}")
-                print(f"Realm: {slug} ({region.upper()})")
-                print(f"Connected realm ID: {connected_realm_id}")
+                tqdm.write(f"Saved {auctions_count} auctions to {out_path}")
+                tqdm.write(f"Realm: {slug} ({region.upper()})")
+                tqdm.write(f"Connected realm ID: {connected_realm_id}")
         except Exception as err:
             failed += len(slugs)
-            print(
+            tqdm.write(
                 f"Warn: failed connected realm {connected_realm_id} for {len(slugs)} slug(s): {err}",
-                file=sys.stderr,
             )
 
     updated = len(realms) - failed
