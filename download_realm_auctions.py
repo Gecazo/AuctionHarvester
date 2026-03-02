@@ -256,10 +256,6 @@ def download_all_realms(
                     json.dump(auctions_payload, file, indent=2)
 
             auctions_count = len(auctions_payload.get("auctions", []))
-            tqdm.write(
-                f"[{region.upper()}] Connected realm {connected_realm_id}: "
-                f"saved {auctions_count} auctions for {len(slugs)} realm(s)"
-            )
         except Exception as err:
             failed += len(slugs)
             tqdm.write(

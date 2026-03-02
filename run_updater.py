@@ -2,7 +2,8 @@ import argparse
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
+from tqdm import tqdm
 
 
 VALID_REGIONS = {"us", "eu", "kr", "tw"}
@@ -44,6 +45,33 @@ def parse_regions(region: str | None, regions: str) -> list[str]:
 
 def run_command(command: list[str]) -> None:
     subprocess.run(command, check=True)
+
+
+def get_time_to_midnight() -> float:
+    """Calculate seconds until midnight UTC."""
+    now = datetime.now(timezone.utc)
+    tomorrow_midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    seconds_to_midnight = (tomorrow_midnight - now).total_seconds()
+    return seconds_to_midnight
+
+
+def show_progress_bars(sleep_seconds: int) -> None:
+    """Display progress bars for next update and next daily aggregation."""
+    seconds_to_midnight = get_time_to_midnight()
+    
+    # Progress bar for next update
+    print("\n" + "=" * 60)
+    for _ in tqdm(range(sleep_seconds), desc="Next update", unit="s", unit_scale=True):
+        time.sleep(1)
+    
+    # Show time until next aggregation
+    seconds_to_midnight = get_time_to_midnight()
+    hours = int(seconds_to_midnight // 3600)
+    minutes = int((seconds_to_midnight % 3600) // 60)
+    print(f"Next daily aggregation: {hours}h {minutes}m")
+    print("=" * 60 + "\n")
 
 
 def run_cycle(region: str, output_dir: str) -> None:
@@ -113,8 +141,7 @@ def main() -> None:
             break
 
         sleep_seconds = max(args.interval_minutes, 1) * 60
-        print(f"Sleeping {sleep_seconds} seconds...")
-        time.sleep(sleep_seconds)
+        show_progress_bars(sleep_seconds)
 
 
 if __name__ == "__main__":
