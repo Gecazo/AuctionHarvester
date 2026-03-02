@@ -1,7 +1,6 @@
 import argparse
 import pathlib
 import re
-import sys
 from tqdm import tqdm
 
 from download_realm_auctions import get_access_token, load_credentials, request_json
@@ -11,6 +10,7 @@ VALID_REGIONS = ["us", "eu", "kr", "tw"]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate realm_lists/<region>_realms.txt")
+    parser.add_argument("--region", default=None, help="Single region (compatibility)")
     parser.add_argument("--regions", default="kr,tw", help="Comma-separated regions")
     parser.add_argument("--start-id", type=int, default=1)
     parser.add_argument("--end-id", type=int, default=5000)
@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def is_404_error(err: RuntimeError) -> bool:
+def is_404_error(err: Exception) -> bool:
     return bool(re.search(r"HTTP\s*404", str(err)))
 
 
@@ -46,7 +46,7 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
                 namespace=namespace,
                 locale=locale,
             )
-        except RuntimeError as err:
+        except Exception as err:
             if is_404_error(err):
                 misses += 1
                 if slugs and misses >= stop_after_misses:
@@ -71,7 +71,10 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
 
 def main() -> None:
     args = parse_args()
-    requested = [part.strip().lower() for part in args.regions.split(",") if part.strip()]
+    if args.region:
+        requested = [args.region.strip().lower()]
+    else:
+        requested = [part.strip().lower() for part in args.regions.split(",") if part.strip()]
     invalid = [value for value in requested if value not in VALID_REGIONS]
     if invalid:
         raise SystemExit(f"Invalid regions: {', '.join(invalid)}")
