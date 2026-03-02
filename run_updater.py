@@ -107,14 +107,14 @@ def run_cycle(region: str, output_dir: str, position: int | None = None) -> None
 
 
 def run_daily_aggregation() -> None:
-    """Run the daily aggregation script for the previous day."""
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Running daily aggregation...")
+    """Run the windowed aggregation and clean up old snapshots."""
+    print(f"[{datetime.now(timezone.utc).isoformat()}] Running windowed aggregation (morning/day/evening/night)...")
     try:
-        run_command([sys.executable, "aggregate_daily_snapshots.py"])
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Daily aggregation completed")
+        run_command([sys.executable, "aggregate_windowed_snapshots.py"])
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Windowed aggregation completed")
     except subprocess.CalledProcessError as err:
         print(
-            f"Daily aggregation failed with exit code {err.returncode}",
+            f"Windowed aggregation failed with exit code {err.returncode}",
             file=sys.stderr,
         )
 
