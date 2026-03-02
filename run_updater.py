@@ -3,6 +3,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone, date, timedelta
+from threading import Thread
 from tqdm import tqdm
 
 
@@ -74,29 +75,33 @@ def show_progress_bars(sleep_seconds: int) -> None:
     print("=" * 60 + "\n")
 
 
-def run_cycle(region: str, output_dir: str) -> None:
+def run_cycle(region: str, output_dir: str, position: int | None = None) -> None:
     print(f"[{datetime.now(timezone.utc).isoformat()}] Starting update cycle for {region.upper()}")
 
-    run_command(
-        [
-            sys.executable,
-            "download_realm_auctions.py",
-            "--region",
-            region,
-            "--all",
-            "--output-dir",
-            output_dir,
-        ]
-    )
+    cmd = [
+        sys.executable,
+        "download_realm_auctions.py",
+        "--region",
+        region,
+        "--all",
+        "--output-dir",
+        output_dir,
+    ]
+    if position is not None:
+        cmd.extend(["--position", str(position)])
+    
+    run_command(cmd)
 
-    run_command(
-        [
-            sys.executable,
-            "ingest_auctions_to_postgres.py",
-            "--glob",
-            f"{output_dir}/auctions_*_{region}.json",
-        ]
-    )
+    ingest_cmd = [
+        sys.executable,
+        "ingest_auctions_to_postgres.py",
+        "--glob",
+        f"{output_dir}/auctions_*_{region}.json",
+    ]
+    if position is not None:
+        ingest_cmd.extend(["--position", str(position)])
+    
+    run_command(ingest_cmd)
 
     print(f"[{datetime.now(timezone.utc).isoformat()}] Cycle completed for {region.upper()}")
 
@@ -110,6 +115,17 @@ def run_daily_aggregation() -> None:
     except subprocess.CalledProcessError as err:
         print(
             f"Daily aggregation failed with exit code {err.returncode}",
+            file=sys.stderr,
+        )
+
+
+def run_region_cycle(region: str, output_dir: str, position: int | None = None) -> None:
+    """Run cycle for a single region with error handling."""
+    try:
+        run_cycle(region=region, output_dir=output_dir, position=position)
+    except subprocess.CalledProcessError as err:
+        print(
+            f"Cycle failed for {region.upper()} with exit code {err.returncode}",
             file=sys.stderr,
         )
 
@@ -128,14 +144,16 @@ def main() -> None:
             run_daily_aggregation()
             last_aggregation_date = current_date
         
-        for region in regions:
-            try:
-                run_cycle(region=region, output_dir=args.output_dir)
-            except subprocess.CalledProcessError as err:
-                print(
-                    f"Cycle failed for {region.upper()} with exit code {err.returncode}",
-                    file=sys.stderr,
-                )
+        # Run all regions in parallel threads
+        threads = []
+        for idx, region in enumerate(regions):
+            thread = Thread(target=run_region_cycle, args=(region, args.output_dir, idx))
+            thread.start()
+            threads.append(thread)
+        
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
 
         if args.once:
             break

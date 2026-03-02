@@ -16,6 +16,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Load realm auction JSON files into PostgreSQL")
     parser.add_argument("--glob", default="data/auctions_*_*.json", help="File glob pattern")
     parser.add_argument("--database-url", default=None, help="Override DATABASE_URL")
+    parser.add_argument(
+        "--position",
+        type=int,
+        default=None,
+        help="Progress bar position for parallel execution",
+    )
     return parser.parse_args()
 
 
@@ -138,7 +144,7 @@ def main() -> None:
     with psycopg.connect(database_url, autocommit=False) as conn:
         with conn.cursor() as cur:
             seen_connected_snapshots: set[tuple[str, int, dt.datetime | None]] = set()
-            pbar = tqdm(files, desc="Ingesting auctions", unit="file")
+            pbar = tqdm(files, desc="Ingesting auctions", unit="file", position=args.position, leave=True)
             for path in pbar:
                 realm, region = parse_file_meta(path)
                 payload = json.loads(path.read_text(encoding="utf-8"))

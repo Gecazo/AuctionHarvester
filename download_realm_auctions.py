@@ -202,6 +202,7 @@ def download_all_realms(
     token: str,
     output_dir: str,
     realm_list_path: str | None,
+    position: int | None = None,
 ) -> None:
     realms_from_files = known_realms_from_files(region=region, output_dir=output_dir)
     realms_from_list = known_realms_from_list_file(region=region, realm_list_path=realm_list_path)
@@ -217,7 +218,7 @@ def download_all_realms(
     connected_to_slugs: dict[int, list[str]] = {}
     failed = 0
 
-    for slug in tqdm(realms, desc=f"{region.upper()} realms", unit="realm"):
+    for slug in tqdm(realms, desc=f"{region.upper()} realms", unit="realm", position=position, leave=True):
         try:
             encoded_realm = urllib.parse.quote(slug, safe="")
             realm_payload = request_json(
@@ -237,7 +238,9 @@ def download_all_realms(
     for connected_realm_id, slugs in tqdm(
         connected_to_slugs.items(), 
         desc=f"{region.upper()} auctions", 
-        unit="connected-realm"
+        unit="connected-realm",
+        position=position,
+        leave=True
     ):
         try:
             auctions_payload = request_json(
@@ -290,6 +293,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional text file with one realm slug per line (used by --all when output files do not exist)",
     )
+    parser.add_argument(
+        "--position",
+        type=int,
+        default=None,
+        help="Progress bar position for parallel execution",
+    )
     return parser
 
 
@@ -312,6 +321,7 @@ def main() -> None:
                 token=token,
                 output_dir=args.output_dir,
                 realm_list_path=args.realm_list,
+                position=args.position,
             )
             return
 
