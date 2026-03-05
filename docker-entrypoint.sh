@@ -16,8 +16,13 @@ else:
     raise SystemExit("PostgreSQL did not become ready in time")
 PY
 
-echo "Generating realm lists..."
-python generate_realm_lists.py --regions "${REGIONS:-eu,us,kr,tw}"
+echo "Checking realm lists..."
+if [ ! -f "realm_lists/eu_realms.txt" ] || [ ! -f "realm_lists/us_realms.txt" ]; then
+  echo "Generating missing realm lists..."
+  python generate_realm_lists.py --regions "${REGIONS:-eu,us,kr,tw}"
+else
+  echo "Realm lists already exist, skipping generation"
+fi
 
 echo "Initializing database schema..."
 python init_postgres.py

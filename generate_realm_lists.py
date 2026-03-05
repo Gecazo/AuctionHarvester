@@ -75,6 +75,22 @@ def main() -> None:
     if invalid:
         raise SystemExit(f"Invalid regions: {', '.join(invalid)}")
 
+    # Check if all requested realm files already exist
+    out_dir = pathlib.Path("realm_lists")
+    missing_regions = [
+        region for region in requested 
+        if not (out_dir / f"{region}_realms.txt").exists()
+    ]
+    
+    if not missing_regions:
+        print(f"All requested realm lists already exist: {', '.join(requested)}")
+        print("Skipping regeneration. Delete files to force regeneration.")
+        return
+
+    if missing_regions:
+        print(f"Missing realm lists for: {', '.join(missing_regions)}")
+        print(f"Will regenerate missing regions only...")
+
     client_id, client_secret = load_credentials()
     if not client_id or not client_secret:
         raise SystemExit("Set credentials with: python3 setup_credentials.py")
@@ -84,7 +100,7 @@ def main() -> None:
     out_dir = pathlib.Path("realm_lists")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for region in requested:
+    for region in missing_regions:
         slugs = discover_region_slugs(
             region=region,
             token=token,

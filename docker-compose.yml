@@ -9,7 +9,7 @@ services:
       POSTGRES_DB: auctionharvester
       POSTGRES_INITDB_ARGS: "-c shared_buffers=128MB -c effective_cache_size=256MB -c work_mem=16MB -c maintenance_work_mem=32MB -c random_page_cost=1.1"
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ${POSTGRES_DATA_PATH:-/Volumes/harvester/harvester/pgdata}:/var/lib/postgresql/data
     healthcheck:
