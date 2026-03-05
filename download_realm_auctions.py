@@ -7,7 +7,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from tqdm import tqdm
+
 
 
 VALID_REGIONS = {"us", "eu", "kr", "tw"}
@@ -218,7 +218,9 @@ def download_all_realms(
     connected_to_slugs: dict[int, list[str]] = {}
     failed = 0
 
-    for slug in tqdm(realms, desc=f"{region.upper()} realms", unit="realm", position=position, leave=True):
+    for idx, slug in enumerate(realms, 1):
+        remaining = len(realms) - idx
+        print(f"{slug} [{idx}/{len(realms)}] ({remaining} left)")
         try:
             encoded_realm = urllib.parse.quote(slug, safe="")
             realm_payload = request_json(
@@ -232,16 +234,13 @@ def download_all_realms(
             connected_to_slugs.setdefault(connected_realm_id, []).append(slug)
         except Exception as err:
             failed += 1
-            tqdm.write(f"Warn: failed realm {slug}: {err}")
+            print(f"Warn: failed realm {slug}: {err}")
 
     cached_payloads: dict[int, dict] = {}
-    for connected_realm_id, slugs in tqdm(
-        connected_to_slugs.items(), 
-        desc=f"{region.upper()} auctions", 
-        unit="connected-realm",
-        position=position,
-        leave=True
-    ):
+    items = list(connected_to_slugs.items())
+    for idx, (connected_realm_id, slugs) in enumerate(items, 1):
+        remaining = len(items) - idx
+        print(f"Connected realm {connected_realm_id} [{idx}/{len(items)}] ({remaining} left)")
         try:
             auctions_payload = request_json(
                 region=region,
@@ -261,8 +260,8 @@ def download_all_realms(
             auctions_count = len(auctions_payload.get("auctions", []))
         except Exception as err:
             failed += len(slugs)
-            tqdm.write(
-                f"Warn: failed connected realm {connected_realm_id} for {len(slugs)} slug(s): {err}",
+            print(
+                f"Warn: failed connected realm {connected_realm_id} for {len(slugs)} slug(s): {err}"
             )
 
     updated = len(realms) - failed

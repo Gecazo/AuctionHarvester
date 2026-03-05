@@ -7,7 +7,7 @@ import re
 import sys
 
 import psycopg
-from tqdm import tqdm
+
 
 FILE_PATTERN = re.compile(r"auctions_(?P<realm>.+)_(?P<region>us|eu|kr|tw)\.json$")
 
@@ -144,8 +144,8 @@ def main() -> None:
     with psycopg.connect(database_url, autocommit=False) as conn:
         with conn.cursor() as cur:
             seen_connected_snapshots: set[tuple[str, int, dt.datetime | None]] = set()
-            pbar = tqdm(files, desc="Ingesting auctions", unit="file", position=args.position, leave=True)
-            for path in pbar:
+            for idx, path in enumerate(files, 1):
+                remaining = len(files) - idx
                 realm, region = parse_file_meta(path)
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 auctions = payload.get("auctions", [])
@@ -158,7 +158,7 @@ def main() -> None:
                 if isinstance(connected_realm_id, int):
                     dedupe_key = (region, connected_realm_id, fetched_at)
                     if dedupe_key in seen_connected_snapshots:
-                        tqdm.write(
+                        print(
                             f"Skipped duplicate: {path.name} "
                             f"(realm_id={connected_realm_id})"
                         )
@@ -169,7 +169,7 @@ def main() -> None:
                 
                 # Skip if this exact snapshot already exists in the database
                 if snapshot_exists(cur, realm_id, fetched_at):
-                    tqdm.write(f"Skipped {path.name}: snapshot already exists")
+                    print(f"Skipped {path.name}: snapshot already exists")
                     continue
                 
                 snapshot_id = insert_snapshot(
@@ -181,7 +181,7 @@ def main() -> None:
                 )
                 inserted = insert_auctions(cur, snapshot_id=snapshot_id, auctions=auctions)
                 conn.commit()
-                pbar.set_postfix_str(f"{realm}/{region} | {inserted} auctions", refresh=True)
+                print(f"{realm}/{region}: {inserted} auctions [{idx}/{len(files)}] ({remaining} left)")
 
     print("Done.")
 

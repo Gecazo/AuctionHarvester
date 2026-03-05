@@ -4,7 +4,7 @@ import sys
 import time
 from datetime import datetime, timezone, date, timedelta
 from threading import Thread
-from tqdm import tqdm
+
 
 
 VALID_REGIONS = {"us", "eu", "kr", "tw"}
@@ -64,8 +64,13 @@ def show_progress_bars(sleep_seconds: int) -> None:
     
     # Progress bar for next update
     print("\n" + "=" * 60)
-    for _ in tqdm(range(sleep_seconds), desc="Next update", unit="s", unit_scale=True):
+    for i in range(sleep_seconds):
+        remaining_seconds = sleep_seconds - i - 1
+        minutes = remaining_seconds // 60
+        secs = remaining_seconds % 60
+        print(f"Next update in: {minutes:02d}m {secs:02d}s", end="\r")
         time.sleep(1)
+    print("                    ")
     
     # Show time until next aggregation
     seconds_to_midnight = get_time_to_midnight()
