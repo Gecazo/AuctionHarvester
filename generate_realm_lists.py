@@ -1,11 +1,13 @@
 import argparse
 import pathlib
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 from download_realm_auctions import get_access_token, load_credentials, request_json
 
 VALID_REGIONS = ["us", "eu", "kr", "tw"]
+MAX_WORKERS = 32  # Parallel requests
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,9 +37,9 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
     namespace = f"dynamic-{region}"
     locale = default_locale(region)
     slugs: set[str] = set()
-    misses = 0
-
-    for connected_realm_id in tqdm(range(start_id, end_id + 1), desc=f"{region.upper()} connected realms", unit="id", ncols=80, leave=False):
+    
+    def fetch_realm(connected_realm_id: int) -> tuple[int, dict | None]:
+        """Fetch a single realm and return (id, payload)."""
         try:
             payload = request_json(
                 region=region,
@@ -46,22 +48,51 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
                 namespace=namespace,
                 locale=locale,
             )
+            return connected_realm_id, payload
         except Exception as err:
             if is_404_error(err):
-                misses += 1
-                if slugs and misses >= stop_after_misses:
-                    break
-                continue
-            continue
-
-        misses = 0
-        found_slugs = []
-        for realm in payload.get("realms", []):
-            slug = realm.get("slug") if isinstance(realm, dict) else None
-            if isinstance(slug, str) and slug:
-                slugs.add(slug)
-                found_slugs.append(slug)
-
+                return connected_realm_id, None
+            return connected_realm_id, None
+    
+    # Parallel requests with early stopping on consecutive misses
+    consecutive_misses = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {}
+        # Submit initial batch
+        for realm_id in range(start_id, min(start_id + MAX_WORKERS * 2, end_id + 1)):
+            future = executor.submit(fetch_realm, realm_id)
+            futures[future] = realm_id
+        
+        pbar = tqdm(total=end_id - start_id + 1, desc=f"{region.upper()} connected realms", unit="id", ncols=80, leave=False)
+        processed = 0
+        
+        for future in as_completed(futures):
+            realm_id, payload = future.result()
+            processed += 1
+            pbar.update(1)
+            
+            if payload is not None:
+                consecutive_misses = 0
+                for realm in payload.get("realms", []):
+                    slug = realm.get("slug") if isinstance(realm, dict) else None
+                    if isinstance(slug, str) and slug:
+                        slugs.add(slug)
+            else:
+                consecutive_misses += 1
+                # Stop early if too many consecutive misses
+                if slugs and consecutive_misses >= stop_after_misses:
+                    executor.shutdown(wait=False)
+                    pbar.close()
+                    return sorted(slugs)
+            
+            # Submit next batch as futures complete
+            next_id = max(futures.values()) + 1 if futures else start_id
+            if next_id <= end_id:
+                future = executor.submit(fetch_realm, next_id)
+                futures[future] = next_id
+        
+        pbar.close()
+    
     return sorted(slugs)
 
 
