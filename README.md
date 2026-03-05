@@ -35,6 +35,30 @@ python3 run_updater.py --regions eu,us,kr,tw --interval-minutes 20
 
 At midnight UTC, it automatically aggregates yesterday's data into hourly windows and daily averages, then cleans up raw snapshots older than 6 hours.
 
+## Deploy To UGREEN DXP4800
+
+Use the deployment helper to push compose config, sync realm lists, and start containers over SSH:
+
+```bash
+./deploy_to_ugreen.sh \
+  --host <ugreen-ip> \
+  --user <ssh-user> \
+  --blizzard-client-id <client-id> \
+  --blizzard-client-secret <client-secret>
+```
+
+Defaults:
+- Image: `dockazo/auctionharvester-updater:latest`
+- Remote directory: `~/auctionharvester`
+- Regions: `eu,us,kr,tw`
+- Interval: `20` minutes
+
+Show all options:
+
+```bash
+./deploy_to_ugreen.sh --help
+```
+
 ## Data Architecture
 
 **Tier 1: Raw snapshots** (6-hour retention)
