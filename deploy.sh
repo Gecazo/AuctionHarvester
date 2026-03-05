@@ -17,7 +17,6 @@ Optional:
   --image IMAGE                Updater image (default: dockazo/auctionharvester-updater:latest)
   --regions LIST               Regions list (default: eu,us,kr,tw)
   --interval-minutes N         Update interval in minutes (default: 20)
-  --realm-lists-dir DIR        Local realm lists directory (default: ./realm_lists)
 
 Example:
   ./deploy_to_ugreen.sh \
@@ -35,7 +34,6 @@ REMOTE_DIR="~/auctionharvester"
 IMAGE="dockazo/auctionharvester-updater:latest"
 REGIONS="eu,us,kr,tw"
 INTERVAL_MINUTES="20"
-REALM_LISTS_DIR="./realm_lists"
 BLIZZARD_CLIENT_ID=""
 BLIZZARD_CLIENT_SECRET=""
 
@@ -69,10 +67,6 @@ while [[ $# -gt 0 ]]; do
       INTERVAL_MINUTES="${2:-}"
       shift 2
       ;;
-    --realm-lists-dir)
-      REALM_LISTS_DIR="${2:-}"
-      shift 2
-      ;;
     --blizzard-client-id)
       BLIZZARD_CLIENT_ID="${2:-}"
       shift 2
@@ -99,18 +93,6 @@ if [[ -z "$HOST" || -z "$USER_NAME" || -z "$BLIZZARD_CLIENT_ID" || -z "$BLIZZARD
   exit 1
 fi
 
-if [[ ! -d "$REALM_LISTS_DIR" ]]; then
-  echo "Realm lists directory not found: $REALM_LISTS_DIR" >&2
-  exit 1
-fi
-
-for f in eu_realms.txt us_realms.txt kr_realms.txt tw_realms.txt; do
-  if [[ ! -f "$REALM_LISTS_DIR/$f" ]]; then
-    echo "Required realm list missing: $REALM_LISTS_DIR/$f" >&2
-    exit 1
-  fi
-done
-
 SSH_TARGET="$USER_NAME@$HOST"
 SSH_OPTS=(-p "$PORT")
 SCP_OPTS=(-P "$PORT")
@@ -124,10 +106,7 @@ trap cleanup EXIT
 echo "[1/5] Preparing remote directories..."
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p $REMOTE_DIR/{data,pgdata,realm_lists}"
 
-echo "[2/5] Syncing realm lists..."
-scp "${SCP_OPTS[@]}" "$REALM_LISTS_DIR"/*.txt "$SSH_TARGET:$REMOTE_DIR/realm_lists/"
-
-echo "[3/5] Writing remote .env..."
+echo "[2/4] Writing remote .env..."
 ENV_FILE="$TMP_DIR/.env"
 {
   printf 'BLIZZARD_CLIENT_ID=%s\n' "$BLIZZARD_CLIENT_ID"
@@ -141,7 +120,7 @@ ENV_FILE="$TMP_DIR/.env"
 } > "$ENV_FILE"
 scp "${SCP_OPTS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_DIR/.env"
 
-echo "[4/5] Writing remote docker-compose.yml..."
+echo "[3/4] Writing remote docker-compose.yml..."
 COMPOSE_FILE="$TMP_DIR/docker-compose.yml"
 cat > "$COMPOSE_FILE" <<'EOF'
 services:
@@ -165,6 +144,7 @@ services:
       retries: 12
       start_period: 20s
 
+
   updater:
     image: __UPDATER_IMAGE__
     container_name: auctionharvester-updater
@@ -186,7 +166,7 @@ EOF
 sed -i '' "s|__UPDATER_IMAGE__|$IMAGE|g" "$COMPOSE_FILE"
 scp "${SCP_OPTS[@]}" "$COMPOSE_FILE" "$SSH_TARGET:$REMOTE_DIR/docker-compose.yml"
 
-echo "[5/5] Pulling image and starting services..."
+echo "[4/4] Pulling image and starting services..."
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "cd $REMOTE_DIR && docker compose pull && docker compose up -d && docker compose ps"
 
 echo

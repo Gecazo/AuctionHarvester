@@ -43,4 +43,3 @@ services:
       OUTPUT_DIR: ${OUTPUT_DIR:-data}
     volumes:
       - ${AUCTION_DATA_PATH:-/Volumes/harvester/harvester/data}:/app/data
-      - ${REALM_LISTS_PATH:-./realm_lists}:/app/realm_lists:ro
