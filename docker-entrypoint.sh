@@ -17,11 +17,21 @@ else:
 PY
 
 echo "Checking realm lists..."
-if [ ! -f "realm_lists/eu_realms.txt" ] || [ ! -f "realm_lists/us_realms.txt" ]; then
+REGIONS_TO_CHECK="${REGIONS:-eu,us,kr,tw}"
+ALL_EXIST=true
+for region in $(echo "$REGIONS_TO_CHECK" | tr ',' ' '); do
+  region=$(echo "$region" | xargs)  # trim whitespace
+  if [ ! -f "realm_lists/${region}_realms.txt" ]; then
+    echo "Missing: ${region}_realms.txt"
+    ALL_EXIST=false
+  fi
+done
+
+if [ "$ALL_EXIST" = false ]; then
   echo "Generating missing realm lists..."
-  python generate_realm_lists.py --regions "${REGIONS:-eu,us,kr,tw}"
+  python generate_realm_lists.py --regions "$REGIONS_TO_CHECK"
 else
-  echo "Realm lists already exist, skipping generation"
+  echo "All realm lists exist, skipping generation"
 fi
 
 echo "Initializing database schema..."
