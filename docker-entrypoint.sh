@@ -16,6 +16,18 @@ else:
     raise SystemExit("PostgreSQL did not become ready in time")
 PY
 
+echo "Validating realm lists..."
+REGIONS_TO_CHECK="${REGIONS:-eu,us,kr,tw}"
+for region in $(echo "$REGIONS_TO_CHECK" | tr ',' ' '); do
+    region=$(echo "$region" | xargs)
+    if [ ! -f "realm_lists/${region}_realms.txt" ]; then
+        echo "Missing realm list: realm_lists/${region}_realms.txt" >&2
+        echo "Realm generation is disabled at startup." >&2
+        echo "Generate manually with: python generate_realm_lists.py --regions $REGIONS_TO_CHECK" >&2
+        exit 1
+    fi
+done
+
 echo "Initializing database schema..."
 python init_postgres.py
 
