@@ -37,7 +37,7 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
     slugs: set[str] = set()
     misses = 0
 
-    for connected_realm_id in tqdm(range(start_id, end_id + 1), desc=f"{region.upper()} connected realms", unit="id"):
+    for connected_realm_id in tqdm(range(start_id, end_id + 1), desc=f"{region.upper()} connected realms", unit="id", ncols=80, leave=False):
         try:
             payload = request_json(
                 region=region,
@@ -50,10 +50,8 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
             if is_404_error(err):
                 misses += 1
                 if slugs and misses >= stop_after_misses:
-                    tqdm.write(f"Stopping: {misses} consecutive misses")
                     break
                 continue
-            tqdm.write(f"Warn [{region}] id {connected_realm_id}: {err}")
             continue
 
         misses = 0
@@ -63,8 +61,6 @@ def discover_region_slugs(region: str, token: str, start_id: int, end_id: int, s
             if isinstance(slug, str) and slug:
                 slugs.add(slug)
                 found_slugs.append(slug)
-        if found_slugs:
-            tqdm.write(f"ID {connected_realm_id}: found {', '.join(found_slugs)}")
 
     return sorted(slugs)
 

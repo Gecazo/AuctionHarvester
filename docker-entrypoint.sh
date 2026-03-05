@@ -1,13 +1,10 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 set -eu
 
 echo "Waiting for PostgreSQL..."
 python - <<'PY'
-import os
-import time
-import psycopg
-
-url = os.environ.get("DATABASE_URL", "postgresql://auction:auction@postgres:5432/auctionharvester")
+import os, time, psycopg
+url = os.environ["DATABASE_URL"]
 for _ in range(60):
     try:
         with psycopg.connect(url, connect_timeout=5):
@@ -19,5 +16,14 @@ else:
     raise SystemExit("PostgreSQL did not become ready in time")
 PY
 
+echo "Generating realm lists..."
+python generate_realm_lists.py --regions "${REGIONS:-eu,us,kr,tw}"
+
+echo "Initializing database schema..."
 python init_postgres.py
-exec python run_updater.py --regions "${REGIONS:-eu,us,kr,tw}" --interval-minutes "${INTERVAL_MINUTES:-20}" --output-dir "${OUTPUT_DIR:-data}"
+
+echo "Starting updater..."
+exec python run_updater.py \
+  --regions "${REGIONS:-eu,us,kr,tw}" \
+  --interval-minutes "${INTERVAL_MINUTES:-20}" \
+  --output-dir "${OUTPUT_DIR:-data}"

@@ -1,5 +1,7 @@
 __pycache__/
 .env
+env copy
 data/
 pgdata/
 .DS_Store
+docker-compose.server.yml

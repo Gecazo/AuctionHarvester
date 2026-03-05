@@ -17,7 +17,6 @@ import sys
 from datetime import datetime, timezone, date, timedelta
 
 import psycopg
-from psycopg import sql
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,20 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_db_connection() -> psycopg.Connection:
-    db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", "5432")
-    db_name = os.getenv("DB_NAME", "auctionharvester")
-    db_user = os.getenv("DB_USER", "auction")
-    db_password = os.getenv("DB_PASSWORD", "auction")
-
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://auction:auction@localhost:5432/auctionharvester",
+    )
     try:
-        conn = psycopg.connect(
-            host=db_host,
-            port=db_port,
-            dbname=db_name,
-            user=db_user,
-            password=db_password,
-        )
+        conn = psycopg.connect(database_url)
         logger.info("Connected to database")
         return conn
     except psycopg.Error as e:
