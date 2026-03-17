@@ -2,7 +2,7 @@ import argparse
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, timezone, timedelta
 from threading import Thread
 
 
@@ -139,12 +139,12 @@ def main() -> None:
     args = parse_args()
     regions = parse_regions(args.region, args.regions)
     
-    # Track the last aggregation date to run it once per day at midnight
-    last_aggregation_date = date.today()
+    # Track the last aggregation date to run it once per day at midnight (UTC)
+    last_aggregation_date = datetime.now(timezone.utc).date()
 
     while True:
-        # Check if we've crossed into a new day
-        current_date = date.today()
+        # Check if we've crossed into a new day (UTC)
+        current_date = datetime.now(timezone.utc).date()
         if current_date > last_aggregation_date:
             run_daily_aggregation()
             last_aggregation_date = current_date
